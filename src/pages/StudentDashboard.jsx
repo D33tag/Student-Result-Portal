@@ -22,23 +22,44 @@ const calculateGPA = (results) => {
 }
 
 function StudentDashboard() {
-  const { userId } = useAuth()
+  const { user, token } = useAuth()
   const [session, setSession] = useState('2022/2023')
+  const [semester, setSemester] = useState('First Semester') // ✅ added
   const [results, setResults] = useState([])
 
+  // Fetch student results from backend
+  const fetchResults = async () => {
+    if (!token) return
+    try {
+      const res = await fetch(
+        `http://localhost:5050/api/results/student?session=${encodeURIComponent(session)}&semester=${encodeURIComponent(semester)}`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      )
+      const data = await res.json()
+      if (data.success) {
+        // ✅ Filter by session + semester
+        const filtered = data.results.filter(
+          r => r.session === session && r.semester === semester
+        )
+        setResults(filtered)
+      }
+    } catch (err) {
+      console.error('Failed to fetch results:', err)
+    }
+  }
+
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('results')) || []
-    const studentResults = stored.filter(
-      r => r.studentId === userId && r.session === session
-    )
-    setResults(studentResults)
-  }, [userId, session])
+    fetchResults()
+  }, [session, semester, token]) // ✅ include semester
 
   return (
     <div className="d-flex flex-column align-items-center">
       <h2 className="fw-bold text-primary text-center mb-2">Student Dashboard</h2>
       <p className="text-muted text-center mb-4">
-        Welcome, <Badge bg="dark">{userId}</Badge>
+        Welcome, <Badge bg="dark">{user?.name}</Badge>
+        <span className="ms-2 text-secondary">({user?.userId})</span>
       </p>
 
       <Card className="shadow-sm w-100" style={{ maxWidth: '800px' }}>
@@ -55,13 +76,28 @@ function StudentDashboard() {
             </select>
           </div>
 
+          {/* ✅ NEW: Semester selector */}
+          <div className="mb-3">
+            <label className="form-label fw-semibold">Select Semester</label>
+            <select
+              className="form-select"
+              value={semester}
+              onChange={(e) => setSemester(e.target.value)}
+            >
+              <option value="First Semester">First Semester</option>
+              <option value="Second Semester">Second Semester</option>
+            </select>
+          </div>
+
           {results.length === 0 ? (
             <div className="alert alert-warning text-center">
-              No results found for this session.
+              No results found for this session/semester.
             </div>
           ) : (
             <>
-              <h5 className="fw-semibold mb-3">Results for {session}</h5>
+              <h5 className="fw-semibold mb-3">
+                Results for {session} — {semester} {/* ✅ show selection */}
+              </h5>
               <Table bordered hover responsive className="text-center">
                 <thead className="table-success">
                   <tr>
@@ -76,10 +112,10 @@ function StudentDashboard() {
                   {results.map((r, i) => (
                     <tr key={i}>
                       <td>{r.course}</td>
-                      <td>{r.lecturer}</td>
+                      <td>{r.lecturerName}</td>
                       <td>{r.score}</td>
                       <td>
-                        <Badge bg="info" className="fs-6">{getGrade(r.score)}</Badge>
+                        <Badge bg="info" className="fs-6">{r.grade}</Badge>
                       </td>
                       <td>{r.unit}</td>
                     </tr>

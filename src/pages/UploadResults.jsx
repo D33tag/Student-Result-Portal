@@ -1,81 +1,129 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Form, Modal } from 'react-bootstrap'
+import axios from '../utils/axiosInstance'
+import { useAuth } from '../AuthContext'
 
 function UploadResults() {
+  const { userId } = useAuth()
+  const [results, setResults] = useState([])
   const [form, setForm] = useState({
     studentId: '',
     course: '',
     score: '',
     unit: '',
     session: '',
-    lecturer: ''
+    semester: 'First Semester'   // ✅ added
   })
-
-  const [results, setResults] = useState([])
-  const [editIndex, setEditIndex] = useState(null)
+  const [editId, setEditId] = useState(null)
   const [showModal, setShowModal] = useState(false)
 
-  useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('results')) || []
-    setResults(stored)
-  }, [])
+  const token = localStorage.getItem('token')
 
-  const saveToLocalStorage = (data) => {
-    localStorage.setItem('results', JSON.stringify(data))
-    setResults(data)
+  // Fetch lecturer’s own results
+  const fetchResults = async () => {
+    try {
+      const res = await axios.get('/api/results/lecturer', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setResults(res.data.results)
+    } catch (err) {
+      console.error('Failed to fetch results:', err.response?.data || err.message)
+    }
   }
+
+  useEffect(() => {
+    if (token) fetchResults()
+  }, [token])
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    const score = parseInt(form.score)
-    if (score < 0 || score > 100) {
+
+    if (parseInt(form.score) < 0 || parseInt(form.score) > 100) {
       alert('Score must be between 0 and 100')
       return
     }
 
-    let updatedResults = [...results]
-    if (editIndex !== null) {
-      updatedResults[editIndex] = form
-      setEditIndex(null)
-      alert('Result updated!')
-    } else {
-      updatedResults.push(form)
-      alert('Result uploaded!')
-    }
+    try {
+      if (editId) {
+        // Update existing result
+        await axios.put(`/api/results/${editId}`, form, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        alert('Result updated!')
+      } else {
+        // Upload new result
+        await axios.post('/api/results/upload', form, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        alert('Result uploaded!')
+      }
 
-    saveToLocalStorage(updatedResults)
-    setForm({ studentId: '', course: '', score: '', unit: '', session: '', lecturer: '' })
-    setShowModal(false)
+      setForm({
+        studentId: '',
+        course: '',
+        score: '',
+        unit: '',
+        session: '',
+        semester: 'First Semester' // ✅ reset with default
+      })
+      setEditId(null)
+      setShowModal(false)
+      fetchResults()
+    } catch (err) {
+      console.error('Error saving result:', err.response?.data || err.message)
+      alert('Failed to save result')
+    }
   }
 
-  const handleEdit = (index) => {
-    setForm(results[index])
-    setEditIndex(index)
+  const handleEdit = (result) => {
+    setForm({
+      studentId: result.studentId,
+      course: result.course,
+      score: result.score,
+      unit: result.unit,
+      session: result.session,
+      semester: result.semester || 'First Semester' // ✅ include semester
+    })
+    setEditId(result._id)
     setShowModal(true)
   }
 
-  const handleDelete = (index) => {
-    if (confirm('Are you sure you want to delete this result?')) {
-      const updatedResults = [...results]
-      updatedResults.splice(index, 1)
-      saveToLocalStorage(updatedResults)
-      alert('Result deleted.')
+  const handleDelete = async (resultId) => {
+    if (!window.confirm('Are you sure you want to delete this result?')) return
+    try {
+      await axios.delete(`/api/results/${resultId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      alert('Result deleted!')
+      fetchResults()
+    } catch (err) {
+      console.error('Failed to delete result:', err.response?.data || err.message)
+      alert('Failed to delete result')
     }
   }
 
   return (
-    <div className="container">
-      <h3 className="mb-4">Lecturer Result Management</h3>
-
-      <Button className="mb-3" onClick={() => {
-        setForm({ studentId: '', course: '', score: '', unit: '', session: '', lecturer: '' })
-        setEditIndex(null)
-        setShowModal(true)
-      }}>
+    <div className="container mt-4">
+      <h3>Lecturer Result Management</h3>
+      <Button
+        className="mb-3"
+        onClick={() => {
+          setForm({
+            studentId: '',
+            course: '',
+            score: '',
+            unit: '',
+            session: '',
+            semester: 'First Semester' // ✅ default when opening modal
+          })
+          setEditId(null)
+          setShowModal(true)
+        }}
+      >
         Upload New Result
       </Button>
 
@@ -88,33 +136,35 @@ function UploadResults() {
             <th>Score</th>
             <th>Unit</th>
             <th>Session</th>
-            <th>Lecturer</th>
+            <th>Semester</th> {/* ✅ new column */}
+            <th>Grade</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody className="text-center">
           {results.map((r, i) => (
-            <tr key={i}>
+            <tr key={r._id}>
               <td>{i + 1}</td>
               <td>{r.studentId}</td>
               <td>{r.course}</td>
               <td>{r.score}</td>
               <td>{r.unit}</td>
               <td>{r.session}</td>
-              <td>{r.lecturer}</td>
+              <td>{r.semester}</td> {/* ✅ show semester */}
+              <td>{r.grade}</td>
               <td>
                 <Button
                   variant="warning"
                   size="sm"
                   className="me-2"
-                  onClick={() => handleEdit(i)}
+                  onClick={() => handleEdit(r)}
                 >
                   Edit
                 </Button>
                 <Button
                   variant="danger"
                   size="sm"
-                  onClick={() => handleDelete(i)}
+                  onClick={() => handleDelete(r._id)}
                 >
                   Delete
                 </Button>
@@ -124,10 +174,9 @@ function UploadResults() {
         </tbody>
       </Table>
 
-      {/* Modal for Upload/Edit */}
       <Modal show={showModal} onHide={() => setShowModal(false)} centered>
         <Modal.Header closeButton>
-          <Modal.Title>{editIndex !== null ? 'Edit Result' : 'Upload New Result'}</Modal.Title>
+          <Modal.Title>{editId ? 'Edit Result' : 'Upload New Result'}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form onSubmit={handleSubmit} className="row g-3">
@@ -140,7 +189,6 @@ function UploadResults() {
                 required
               />
             </Form.Group>
-
             <Form.Group className="col-md-6">
               <Form.Label>Academic Session</Form.Label>
               <Form.Select
@@ -154,7 +202,6 @@ function UploadResults() {
                 <option value="2023/2024">2023/2024</option>
               </Form.Select>
             </Form.Group>
-
             <Form.Group className="col-md-6">
               <Form.Label>Course</Form.Label>
               <Form.Control
@@ -164,7 +211,6 @@ function UploadResults() {
                 required
               />
             </Form.Group>
-
             <Form.Group className="col-md-3">
               <Form.Label>Score</Form.Label>
               <Form.Control
@@ -175,7 +221,6 @@ function UploadResults() {
                 required
               />
             </Form.Group>
-
             <Form.Group className="col-md-3">
               <Form.Label>Unit</Form.Label>
               <Form.Control
@@ -187,19 +232,23 @@ function UploadResults() {
               />
             </Form.Group>
 
-            <Form.Group className="col-md-12">
-              <Form.Label>Lecturer Name</Form.Label>
-              <Form.Control
-                name="lecturer"
-                value={form.lecturer}
+            {/* ✅ NEW: Semester select */}
+            <Form.Group className="col-md-6">
+              <Form.Label>Semester</Form.Label>
+              <Form.Select
+                name="semester"
+                value={form.semester}
                 onChange={handleChange}
                 required
-              />
+              >
+                <option value="First Semester">First Semester</option>
+                <option value="Second Semester">Second Semester</option>
+              </Form.Select>
             </Form.Group>
 
             <Form.Group className="col-12 text-end mt-3">
               <Button variant="success" type="submit">
-                {editIndex !== null ? 'Update' : 'Upload'}
+                {editId ? 'Update' : 'Upload'}
               </Button>
             </Form.Group>
           </Form>

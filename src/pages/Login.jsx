@@ -1,26 +1,47 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
-import Loader from '../components/Spinner'
+import axios from 'axios'
 
 function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const { login } = useAuth()
 
+  const preselectedRole = location.state?.role || ''
   const [userId, setUserId] = useState('')
-  const [role, setRole] = useState(location.state?.role || '')
   const [password, setPassword] = useState('')
-  
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
+    setError('')
 
     if (!password) return alert('Password is required')
-    login(userId, role)
 
-    if (role === 'student') navigate('/student')
-    else if (role === 'lecturer') navigate('/lecturer')
+    try {
+      setLoading(true)
+      const res = await axios.post('http://localhost:5050/api/auth/login', {
+        userId,
+        password
+      })
+
+      if (res.data.success) {
+        login(res.data.user, res.data.token)
+
+        // Redirect based on API role (ignore user input)
+        if (res.data.user.role === 'student') {
+          navigate('/student')
+        } else if (res.data.user.role === 'lecturer') {
+          navigate('/lecturer')
+        }
+      }
+    } catch (err) {
+      setError(err.response?.data?.msg || 'Login failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -35,7 +56,6 @@ function Login() {
         overflow: 'hidden',
       }}
     >
-      {/* Transparent Navbar */}
       <nav
         className="navbar fixed-top d-flex justify-content-between align-items-center px-3"
         style={{
@@ -44,19 +64,13 @@ function Login() {
           color: 'white',
         }}
       >
-        <button
-          onClick={() => navigate('/')}
-          className="btn btn-sm btn-light"
-        >
+        <button className="btn btn-sm btn-light" onClick={() => navigate('/')}>
           ← Back
         </button>
-        <h5 className="m-0 text-white text-center flex-grow-1">
-          RESULT PORTAL
-        </h5>
+        <h5 className="m-0 text-white text-center flex-grow-1">RESULT PORTAL</h5>
         <div style={{ width: '60px' }} />
       </nav>
 
-      {/* Login Card */}
       <div className="d-flex justify-content-center align-items-center vh-100">
         <div
           className="card p-4 shadow text-white"
@@ -71,7 +85,7 @@ function Login() {
         >
           <div className="text-center mb-3">
             <h3 className="fw-bold text-white">
-              {role === 'lecturer' ? 'Lecturer Login' : 'Student Result Portal'}
+              {preselectedRole === 'lecturer' ? 'Lecturer Login' : 'Student Result Portal'}
             </h3>
             <small className="text-light">Login to continue</small>
           </div>
@@ -88,21 +102,16 @@ function Login() {
               />
             </div>
 
-            {!role && (
-              <div className="mb-3">
-                <label className="form-label text-light">Role</label>
-                <select
-                  className="form-select bg-light"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  required
-                >
-                  <option value="">Select role</option>
-                  <option value="student">Student</option>
-                  <option value="lecturer">Lecturer</option>
-                </select>
-              </div>
-            )}
+            {/* Show role as readonly */}
+            <div className="mb-3">
+              <label className="form-label text-light">Role</label>
+              <input
+                type="text"
+                className="form-control bg-light"
+                value={preselectedRole}
+                readOnly
+              />
+            </div>
 
             <div className="mb-3">
               <label className="form-label text-light">Password</label>
@@ -115,15 +124,18 @@ function Login() {
               />
             </div>
 
-            <button className="btn btn-primary w-100" type="submit">
-              Login
+            {error && <p className="text-danger">{error}</p>}
+
+            <button className="btn btn-primary w-100" type="submit" disabled={loading}>
+              {loading ? 'Logging in...' : 'Login'}
             </button>
-            
+
             <div className="text-end mt-2">
               <button
                 className="btn btn-link text-white text-decoration-underline p-0"
                 onClick={() => navigate('/forgot-password')}
                 style={{ fontSize: '0.9rem' }}
+                type="button"
               >
                 Forgot Password?
               </button>

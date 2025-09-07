@@ -2,15 +2,18 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 
 function PrivateRoute({ children, roleRequired }) {
-  const { role } = useAuth()
+  const { role, loading } = useAuth()
+
+  if (loading) {
+    // ✅ Wait until AuthContext finishes checking localStorage
+    return <div>Loading...</div>
+  }
 
   if (!role) {
-    // Not logged in
     return <Navigate to="/" replace />
   }
 
   if (roleRequired && role !== roleRequired) {
-    // Logged in but wrong role
     return <Navigate to="/" replace />
   }
 

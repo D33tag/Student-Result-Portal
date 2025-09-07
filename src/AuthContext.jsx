@@ -1,48 +1,45 @@
+// src/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react'
 
-// Create the context
 const AuthContext = createContext()
 
-// Provider component
 export function AuthProvider({ children }) {
-  const [role, setRole] = useState(null)           // 'student' or 'lecturer'
-  const [userId, setUserId] = useState('')         // Student or lecturer ID
+  const [user, setUser] = useState(null)
+  const [token, setToken] = useState(null)
+  const [loading, setLoading] = useState(true) // ✅ new
 
-  // Login function
-  const login = (id, selectedRole) => {
-    setUserId(id)
-    setRole(selectedRole)
-    localStorage.setItem('userId', id)
-    localStorage.setItem('role', selectedRole)
-  }
-
-  // Logout function
-  const logout = () => {
-    setUserId('')
-    setRole(null)
-    localStorage.removeItem('userId')
-    localStorage.removeItem('role')
-  }
-
-  // Load data from localStorage on refresh
+  // Load from localStorage when app starts
   useEffect(() => {
-    const savedId = localStorage.getItem('userId')
-    const savedRole = localStorage.getItem('role')
-    if (savedId && savedRole) {
-      setUserId(savedId)
-      setRole(savedRole)
+    const storedUser = localStorage.getItem('user')
+    const storedToken = localStorage.getItem('token')
+    if (storedUser && storedToken) {
+      setUser(JSON.parse(storedUser))
+      setToken(storedToken)
     }
+    setLoading(false) // ✅ done checking
   }, [])
 
-  // Provide values to children
+  const login = (userData, tokenData) => {
+    setUser(userData)
+    setToken(tokenData)
+    localStorage.setItem('user', JSON.stringify(userData))
+    localStorage.setItem('token', tokenData)
+  }
+
+  const logout = () => {
+    setUser(null)
+    setToken(null)
+    localStorage.removeItem('user')
+    localStorage.removeItem('token')
+  }
+
   return (
-    <AuthContext.Provider value={{ role, userId, login, logout }}>
+    <AuthContext.Provider value={{ user, token, role: user?.role, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-// Custom hook for easy usage
 export function useAuth() {
   return useContext(AuthContext)
 }
